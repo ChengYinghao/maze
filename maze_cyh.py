@@ -23,6 +23,8 @@ class Maze:
                 if line:
                     new_lines.append(line)
             new_lines = [new_line.split() for new_line in new_lines]
+            if len(new_lines[0]) == 1:
+                new_lines = [list(map(int, new_line[0])) for new_line in new_lines]
             matrix = [[int(num) for num in new_line] for new_line in new_lines]
         self.matrix = matrix
 
@@ -38,10 +40,38 @@ class Maze:
                 cell = Cell(i, j, left, right, up, down)
                 self.cells.append(cell)
 
+    def getNumOfGates(self):
+        num = 0
+        for cell in self.cells:
+            if cell.x == 0 and cell.y == 0:
+                num += int(cell.left) + int(cell.up)
+                continue
+            if cell.x == 0 and cell.y == len(self.matrix[0]) - 2:
+                num += int(cell.up) + int(cell.right)
+                continue
+            if cell.x == len(self.matrix) - 2 and cell.y == 0:
+                num += int(cell.left) + int(cell.down)
+                continue
+            if cell.x == len(self.matrix) - 2 and cell.y == len(self.matrix[0]) - 2:
+                num += int(cell.right) + int(cell.down)
+                continue
+            if cell.x == 0:
+                num += int(cell.up)
+                continue
+            if cell.x == len(self.matrix) - 2:
+                num += int(cell.down)
+                continue
+            if cell.y == 0:
+                num += int(cell.left)
+                continue
+            if cell.y == len(self.matrix[0]) - 2:
+                num += int(cell.right)
+                continue
+        return num
 
 
-maze = Maze('.\\a2_sanity_check\\maze_1.txt')
+maze = Maze('.\\a2_sanity_check\\labyrinth.txt')
 maze.parse_file()
 print(maze.matrix)
 maze.parse_cells()
-print(maze.cells[0].left)
+print(maze.getNumOfGates())
