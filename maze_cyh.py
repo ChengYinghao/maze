@@ -16,7 +16,7 @@ class Maze:
         self.matrix = None
         self.rows = 0
         self.columns = 0
-
+    
     def parse_file(self):
         with open(self.file, 'r') as f:
             new_lines = []
@@ -33,7 +33,7 @@ class Maze:
         self.rows = len(self.matrix) - 1
         self.columns = len(self.matrix[0]) - 1
         self.cells = [[0 for j in range(self.columns)] for i in range(self.rows)]
-
+    
     def parse_cells(self):
         for i in range(self.rows):
             for j in range(self.columns):
@@ -43,7 +43,7 @@ class Maze:
                 down = self.matrix[i + 1][j] == 0 or self.matrix[i + 1][j] == 2
                 cell = Cell(i, j, left, right, up, down)
                 self.cells[i][j] = cell
-
+    
     def getNumOfGates(self):
         num = 0
         for x in range(self.rows):
@@ -74,7 +74,7 @@ class Maze:
                     num += int(cell.right)
                     continue
             return num
-
+    
     def traverse(self):
         initial = [[0 for j in range(self.columns)] for i in range(self.rows)]
         color = 0
@@ -118,7 +118,7 @@ class Maze:
                     self.dfs(cell, initial, color)
                     continue
         return (initial, color)
-
+    
     def dfs(self, startCell, initial, color):
         x = startCell.x
         y = startCell.y
@@ -135,7 +135,7 @@ class Maze:
                 if startCell.left and initial[x][y - 1] == 0:
                     initial[x][y - 1] = color
                     self.dfs(self.cells[x][y - 1], initial, color)
-
+        
         elif x == self.rows - 1:
             if startCell.up and initial[x - 1][y] == 0:
                 initial[x - 1][y] = color
@@ -185,7 +185,7 @@ class Maze:
             if startCell.down and initial[x + 1][y] == 0:
                 initial[x + 1][y] = color
                 self.dfs(self.cells[x + 1][y], initial, color)
-
+    
     # 给定边界坐标，判断是否能出迷宫, 并返回能出的通道数
     def is_out(self, x, y):
         num = 0
@@ -209,7 +209,7 @@ class Maze:
         elif y == self.columns - 1:
             num += cell.right
         return num
-
+    
     def getGates(self, x0, y0, initial, edges_points):
         gates = []
         for point in edges_points:
@@ -219,7 +219,7 @@ class Maze:
                 x][y] == initial[x0][y0]:
                 gates.append(point)
         return gates
-
+    
     def getOtherPoints(self, x0, y0, initial):
         num = 0
         for x in range(self.rows):
@@ -227,7 +227,7 @@ class Maze:
                 if (x != x0 or y != y0) and initial[x][y] == initial[x0][y0]:
                     num += 1
         return num
-
+    
     def getPaths(self, initial):
         paths = 0
         cul_de_sacs = 0
@@ -255,11 +255,79 @@ class Maze:
             if len(gates) == 1:
                 paths += 1
                 otherPoints = self.getOtherPoints(x, y, initial)
-
+                
                 if self.getOtherPoints(x, y, initial) > 1:
                     cul_de_sacs += 1
                 continue
         return (paths, cul_de_sacs)
+    
+    def compute_culdesacs(self):
+        culdesacs_groups = []
+        belonging_group = [[None for c in range(self.columns)] for r in range(self.rows)]
+        while True:
+            changed = False
+            for row, col in self.cells:
+                # todo uncomment it when implemented the accessibility check
+                # if not self.accessible[row][col]:
+                #     continue
+                
+                if belonging_group[row][col] is not None:
+                    continue
+                
+                neighbors = []
+                cell = self.cells[row, col]
+                if cell.up:
+                    neighbors.append((row - 1, col))
+                if cell.down:
+                    neighbors.append((row + 1, col))
+                if cell.right:
+                    neighbors.append((row, col + 1))
+                if cell.left:
+                    neighbors.append((row, col - 1))
+                
+                neighbor_culdesacs_groups = []
+                for neighbor_row, neighbor_col in neighbors:
+                    if not (0 <= neighbor_col < self.columns and 0 <= neighbor_row < self.rows):
+                        continue
+                    neighbor_caldesacs_group = belonging_group[neighbor_row][neighbor_col]
+                    if neighbor_caldesacs_group is not None:
+                        neighbor_culdesacs_groups.append(neighbor_caldesacs_group)
+                        break
+                
+                if not len(neighbor_culdesacs_groups) >= len(neighbors) - 1:
+                    continue
+                
+                if len(neighbor_culdesacs_groups) == 0:
+                    merged_group = [(row, col)]
+                    culdesacs_groups.append(merged_group)
+                    belonging_group[row][col] = merged_group
+                    changed = True
+                else:
+                    merged_group = max(neighbor_culdesacs_groups, key=lambda g: len(g))
+                    for group in neighbor_culdesacs_groups:
+                        if group is merged_group:
+                            continue
+                        culdesacs_groups.remove(group)
+                        merged_group.extend(group)
+                        for removed_row, removed_col in group:
+                            belonging_group[removed_row][removed_col] = merged_group
+                    
+                    merged_group.append((row, col))
+            
+            maze = [[False for c in range(self.columns)] for r in range(self.rows)]
+            for group in culdesacs_groups:
+                for row, col in group:
+                    maze[row][col] = True
+            for row in maze:
+                for cell in row:
+                    print("x" if cell else "o", end="")
+                print()
+            print()
+            
+            if not changed:
+                break
+        
+        return culdesacs_groups, belonging_group
 
 
 maze = Maze('.\\a2_sanity_check\\maze_2.txt')
