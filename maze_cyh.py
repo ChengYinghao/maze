@@ -58,13 +58,13 @@ class Maze:
         return self.matrix[row][col] in (2, 3)
     
     def wall_u(self, row, col):
-        return self.wall_h(col, row)
+        return self.wall_h(row, col)
     
     def wall_d(self, row, col):
         return self.wall_u(row + 1, col)
     
     def wall_l(self, row, col):
-        return self.wall_v(col, row)
+        return self.wall_v(row, col)
     
     def wall_r(self, row, col):
         return self.wall_l(row, col + 1)
@@ -85,37 +85,149 @@ class Maze:
     
     def con_r(self, row, col):
         return not self.wall_r(row, col)
+    
+    def __str__(self):
+        chars_img = full_array_2d((self.row_count + 1) * 2, (self.col_count + 1) * 2, '+')
+        for row in range(self.row_count + 1):
+            for col in range(self.col_count + 1):
+                x = col * 2 + 1
+                y = row * 2 + 1
+                chars_img[y][x] = ' '
+                if self.wall_h(row, col):
+                    chars_img[y - 1][x] = '-'
+                else:
+                    chars_img[y - 1][x] = ' '
+                
+                if self.wall_v(row, col):
+                    chars_img[y][x - 1] = '|'
+                else:
+                    chars_img[y][x - 1] = ' '
+        string = ""
+        for line in chars_img:
+            for item in line[:-1]:
+                string += item
+            string += "\n"
+        return string
 
 
 # computing
 
-def compute_num_of_gates(maze: Maze):
-    num = 0
+def find_gates(maze: Maze):
+    gates = []
     for row in range(maze.row_count):
-        if maze.wall_v(row, 0):
-            num += 1
-        if maze.wall_v(row, maze.col_count):
-            num += 1
+        if not maze.wall_v(row, 0):
+            gates.append((row, 0, 1))
+        if not maze.wall_v(row, maze.col_count):
+            gates.append((row, maze.col_count, 1))
     for col in range(maze.col_count):
-        if maze.wall_h(0, col):
-            num += 1
-        if maze.wall_h(maze.row_count, col):
-            num += 1
-    return num
+        if not maze.wall_h(0, col):
+            gates.append((0, col, 0))
+        if not maze.wall_h(maze.row_count, col):
+            gates.append((maze.row_count, col, 0))
+    return gates
 
 
 def compute_connected_walls(maze: Maze):
-    connected_groups = []
-    belonging_groups = full_array_3d(maze.row_count, maze.col_count, 2, None)
-    for row, col, hv in maze.wall_indices():
-        if not maze.wall(row, col, hv):
+    groups = []
+    belonging_group = full_array_3d(maze.row_count + 1, maze.col_count + 1, 2, None)
+    for first_row, first_col, first_hv in maze.wall_indices():
+        if not maze.wall(first_row, first_col, first_hv):
+            continue
+        if belonging_group[first_row][first_col][first_hv] is not None:
             continue
         
-        head = (row, col, hv)
-        route = [head]
+        new_group = [(first_row, first_col, first_hv)]
+        groups.append(new_group)
+        belonging_group[first_row][first_col][first_hv] = new_group
+        first_node = [(first_row, first_col, first_hv), (neighbor_walls(maze, first_row, first_col, first_hv)), -1]
+        
+        route = [first_node]
+        while True:
+            if len(route) == 0:
+                break
+            this_node = route[-1]
+            
+            this_node[2] += 1
+            (this_row, this_col, this_hv), options, index = this_node
+            if not index < len(options):
+                route.pop()
+                continue
+            next_row, next_col, next_hv = options[index]
+            
+            this_group = belonging_group[this_row][this_col][this_hv]
+            next_group = belonging_group[next_row][next_col][next_hv]
+            if next_group is this_group:
+                continue
+            
+            if next_group is not None:
+                if len(this_group) >= len(next_group):
+                    bigger_group, smaller_group = this_group, next_group
+                else:
+                    bigger_group, smaller_group = next_group, this_group
+                groups.remove(smaller_group)
+                bigger_group.extend(smaller_group)
+                for row, col, hv in smaller_group:
+                    belonging_group[row][col][hv] = bigger_group
+                continue
+            
+            this_group.append((next_row, next_col, next_hv))
+            belonging_group[next_row][next_col][next_hv] = this_group
+            
+            next_options = neighbor_walls(maze, next_row, next_col, next_hv)
+            next_node = [(next_row, next_col, next_hv), next_options, -1]
+            route.append(next_node)
     
-    while True:
-        changed = False
+    return groups
+
+
+def compute_connected_cells(maze: Maze):
+    groups = []
+    belonging_group = full_array_2d(maze.row_count, maze.col_count, None)
+    for first_row, first_col in maze.cell_indices():
+        if belonging_group[first_row][first_col] is not None:
+            continue
+        
+        new_group = [(first_row, first_col)]
+        groups.append(new_group)
+        belonging_group[first_row][first_col] = new_group
+        first_node = [(first_row, first_col), (neighbor_cells(maze, first_row, first_col)), -1]
+        
+        route = [first_node]
+        while True:
+            if len(route) == 0:
+                break
+            this_node = route[-1]
+            
+            this_node[2] += 1
+            (this_row, this_col), options, index = this_node
+            if not index < len(options):
+                route.pop()
+                continue
+            next_row, next_col = options[index]
+            
+            this_group = belonging_group[this_row][this_col]
+            next_group = belonging_group[next_row][next_col]
+            if next_group is this_group:
+                continue
+            
+            if next_group is not None:
+                if len(this_group) >= len(next_group):
+                    bigger_group, smaller_group = this_group, next_group
+                else:
+                    bigger_group, smaller_group = next_group, this_group
+                groups.remove(smaller_group)
+                bigger_group.extend(smaller_group)
+                for row, col in smaller_group:
+                    belonging_group[row][col] = bigger_group
+                continue
+            
+            this_group.append((next_row, next_col))
+            belonging_group[next_row][next_col] = this_group
+            
+            next_options = neighbor_cells(maze, next_row, next_col)
+            next_node = [(next_row, next_col), next_options, -1]
+            route.append(next_node)
+    return groups
 
 
 # computing old
@@ -380,12 +492,11 @@ def compute_culdesacs(self):
 def neighbor_walls(maze: Maze, row, col, hv):
     neighbors = []
     if hv == 0:
+        neighbors.append((row, col, 1))
+        if col < maze.col_count:
+            neighbors.append((row, col + 1, 1))
         if row > 0:
             neighbors.append((row - 1, col, 1))
-            if col < maze.col_count:
-                neighbors.append((row - 1, col + 1, 1))
-        if row < maze.row_count:
-            neighbors.append((row + 1, col, 1))
             if col < maze.col_count:
                 neighbors.append((row - 1, col + 1, 1))
         if col > 0:
@@ -393,18 +504,17 @@ def neighbor_walls(maze: Maze, row, col, hv):
         if col < maze.col_count:
             neighbors.append((row, col + 1, 0))
     else:
-        if col > 0:
-            neighbors.append((row, col - 1, 1))
-            if row < maze.row_count:
-                neighbors.append((row + 1, col - 1, 1))
-        if col < maze.col_count:
-            neighbors.append((row, col + 1, 1))
-            if row < maze.row_count:
-                neighbors.append((row + 1, col + 1, 1))
-        if row > 0:
-            neighbors.append((row - 1, col, 0))
+        neighbors.append((row, col, 0))
         if row < maze.row_count:
             neighbors.append((row + 1, col, 0))
+        if col > 0:
+            neighbors.append((row, col - 1, 0))
+            if row < maze.row_count:
+                neighbors.append((row + 1, col - 1, 0))
+        if row > 0:
+            neighbors.append((row - 1, col, 1))
+        if row < maze.row_count:
+            neighbors.append((row + 1, col, 1))
     neighbors = filter(lambda pos: maze.wall(*pos), neighbors)
     return tuple(neighbors)
 
@@ -452,16 +562,28 @@ def full_array_3d(row_count, col_count, chan_count, value=None):
 
 def main():
     maze = Maze('./a2_sanity_check/maze_2.txt')
-    # print(Maze.getNumOfInaccessiblePoints())
-    initial, color = maze.traverse()
+    print("the maze looks like:")
+    print(maze)
     
-    for line in initial:
-        print(line)
-    print(sum([sum([int(num == 0) for num in line]) for line in initial]))
-    print(color)
-    paths, cul_de_sacs = maze.getPaths(initial)
-    print("paths: ", paths)
-    print("cul_de_sacs: ", cul_de_sacs)
+    gates = find_gates(maze)
+    print("number of gates:", len(gates))
+    
+    wall_groups = compute_connected_walls(maze)
+    print("number of connected walls:", len(wall_groups))
+    
+    cell_groups = compute_connected_cells(maze)
+    print("number of connected cells:", len(cell_groups))
+    
+    # # print(Maze.getNumOfInaccessiblePoints())
+    # initial, color = maze.traverse()
+    #
+    # for line in initial:
+    #     print(line)
+    # print(sum([sum([int(num == 0) for num in line]) for line in initial]))
+    # print(color)
+    # paths, cul_de_sacs = maze.getPaths(initial)
+    # print("paths: ", paths)
+    # print("cul_de_sacs: ", cul_de_sacs)
 
 
 if __name__ == '__main__':
