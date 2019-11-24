@@ -314,16 +314,6 @@ class Maze:
                     
                     merged_group.append((row, col))
             
-            maze = [[False for c in range(self.columns)] for r in range(self.rows)]
-            for group in culdesacs_groups:
-                for row, col in group:
-                    maze[row][col] = True
-            for row in maze:
-                for cell in row:
-                    print("x" if cell else "o", end="")
-                print()
-            print()
-            
             if not changed:
                 break
         
