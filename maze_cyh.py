@@ -266,7 +266,10 @@ class Maze:
         belonging_group = [[None for c in range(self.columns)] for r in range(self.rows)]
         while True:
             changed = False
-            for row, col in self.cells:
+            for cell in self.cells:
+                row = cell.y
+                col = cell.x
+                
                 # todo uncomment it when implemented the accessibility check
                 # if not self.accessible[row][col]:
                 #     continue
@@ -275,7 +278,6 @@ class Maze:
                     continue
                 
                 neighbors = []
-                cell = self.cells[row, col]
                 if cell.up:
                     neighbors.append((row - 1, col))
                 if cell.down:
