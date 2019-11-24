@@ -87,19 +87,19 @@ class Maze:
         return not self.wall_r(row, col)
     
     def __str__(self):
-        chars_img = full_array_2d((self.row_count + 1) * 2, (self.col_count + 1) * 2, '+')
+        chars_img = full_array_2d((self.row_count + 1) * 2, (self.col_count + 1) * 2, '┼')
         for row in range(self.row_count + 1):
             for col in range(self.col_count + 1):
                 x = col * 2 + 1
                 y = row * 2 + 1
                 chars_img[y][x] = ' '
                 if self.wall_h(row, col):
-                    chars_img[y - 1][x] = '-'
+                    chars_img[y - 1][x] = '─'
                 else:
                     chars_img[y - 1][x] = ' '
                 
                 if self.wall_v(row, col):
-                    chars_img[y][x - 1] = '|'
+                    chars_img[y][x - 1] = '│'
                 else:
                     chars_img[y][x - 1] = ' '
         string = ""
