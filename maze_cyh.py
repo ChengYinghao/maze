@@ -164,17 +164,6 @@ def group_connected_walls(maze: Maze):
             if next_group is this_group:
                 continue
             
-            if next_group is not None:
-                if len(this_group) >= len(next_group):
-                    bigger_group, smaller_group = this_group, next_group
-                else:
-                    bigger_group, smaller_group = next_group, this_group
-                groups.remove(smaller_group)
-                bigger_group.extend(smaller_group)
-                for row, col, hv in smaller_group:
-                    belonging_group[row][col][hv] = bigger_group
-                continue
-            
             this_group.append((next_row, next_col, next_hv))
             belonging_group[next_row][next_col][next_hv] = this_group
             
@@ -186,6 +175,10 @@ def group_connected_walls(maze: Maze):
 
 
 def group_connected_cells(maze: Maze):
+    class CellArea:
+        def __init__(self):
+            self.cells = []
+    
     groups = []
     belonging_group = full_array_2d(maze.row_count, maze.col_count, None)
     for first_row, first_col in maze.cell_indices():
@@ -213,17 +206,6 @@ def group_connected_cells(maze: Maze):
             this_group = belonging_group[this_row][this_col]
             next_group = belonging_group[next_row][next_col]
             if next_group is this_group:
-                continue
-            
-            if next_group is not None:
-                if len(this_group) >= len(next_group):
-                    bigger_group, smaller_group = this_group, next_group
-                else:
-                    bigger_group, smaller_group = next_group, this_group
-                groups.remove(smaller_group)
-                bigger_group.extend(smaller_group)
-                for row, col in smaller_group:
-                    belonging_group[row][col] = bigger_group
                 continue
             
             this_group.append((next_row, next_col))
@@ -385,17 +367,6 @@ def is_out(self, x, y):
     elif y == self.col_count - 1:
         num += cell.right
     return num
-
-
-def getGates(self, x0, y0, initial, edges_points):
-    gates = []
-    for point in edges_points:
-        x = point[0]
-        y = point[1]
-        if x != x0 & y != y0 and self.is_out(x, y) and initial[
-            x][y] == initial[x0][y0]:
-            gates.append(point)
-    return gates
 
 
 def getOtherPoints(self, x0, y0, initial):
