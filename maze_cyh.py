@@ -114,20 +114,25 @@ class Maze:
 
 def find_gates(maze: Maze):
     gates = []
+    lobbies = []
     for row in range(maze.row_count):
         if not maze.wall_v(row, 0):
             gates.append((row, 0, 1))
+            lobbies.append((row, 0))
         if not maze.wall_v(row, maze.col_count):
             gates.append((row, maze.col_count, 1))
+            lobbies.append((row, maze.col_count - 1))
     for col in range(maze.col_count):
         if not maze.wall_h(0, col):
             gates.append((0, col, 0))
+            lobbies.append((0, col))
         if not maze.wall_h(maze.row_count, col):
             gates.append((maze.row_count, col, 0))
-    return gates
+            lobbies.append((maze.row_count - 1, col))
+    return tuple(gates), tuple(set(lobbies))
 
 
-def compute_connected_walls(maze: Maze):
+def group_connected_walls(maze: Maze):
     groups = []
     belonging_group = full_array_3d(maze.row_count + 1, maze.col_count + 1, 2, None)
     for first_row, first_col, first_hv in maze.wall_indices():
@@ -180,7 +185,7 @@ def compute_connected_walls(maze: Maze):
     return groups
 
 
-def compute_connected_cells(maze: Maze):
+def group_connected_cells(maze: Maze):
     groups = []
     belonging_group = full_array_2d(maze.row_count, maze.col_count, None)
     for first_row, first_col in maze.cell_indices():
@@ -228,6 +233,17 @@ def compute_connected_cells(maze: Maze):
             next_node = [(next_row, next_col), next_options, -1]
             route.append(next_node)
     return groups
+
+
+def split_by_accessibility(cell_groups, lobbies):
+    accessible_groups = []
+    inaccessible_groups = []
+    for cell_group in cell_groups:
+        if any(cell in lobbies for cell in cell_group):
+            accessible_groups.append(cell_group)
+        else:
+            inaccessible_groups.append(cell_group)
+    return accessible_groups, inaccessible_groups
 
 
 # computing old
@@ -565,14 +581,19 @@ def main():
     print("the maze looks like:")
     print(maze)
     
-    gates = find_gates(maze)
+    gates, lobbies = find_gates(maze)
     print("number of gates:", len(gates))
+    # print("number of lobbies:", len(lobbies))
     
-    wall_groups = compute_connected_walls(maze)
+    wall_groups = group_connected_walls(maze)
     print("number of connected walls:", len(wall_groups))
     
-    cell_groups = compute_connected_cells(maze)
+    cell_groups = group_connected_cells(maze)
     print("number of connected cells:", len(cell_groups))
+    
+    accessible_groups, inaccessible_groups = split_by_accessibility(cell_groups, lobbies)
+    print("number of inner points:", sum(len(g) for g in inaccessible_groups))
+    print("number of accessible area:", len(accessible_groups))
     
     # # print(Maze.getNumOfInaccessiblePoints())
     # initial, color = maze.traverse()
