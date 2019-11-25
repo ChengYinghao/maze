@@ -12,16 +12,18 @@ class Maze:
                     continue
                 row = []
                 for char in row_string:
-                    if char == ' ':
+                    if char in ' \t':
                         continue
-                    wall_num = int(char)
-                    if wall_num not in (0, 1, 2, 3):
-                        raise RuntimeError("Illegal format!")
-                    row.append(wall_num)
+                    if char not in '1234':
+                        raise RuntimeError(
+                            "Illegal format: char ", char,
+                            "is not allowed to appear in this file!"
+                            "Allowed only numbers 1,2,3 4, space, line breaks and tabs.")
+                    row.append(int(char))
                 row = tuple(row)
                 matrix.append(row)
                 if len(row) != len(matrix[0]):
-                    raise RuntimeError("Illegal format!")
+                    raise RuntimeError("Illegal format: size of rows does not matched.")
             matrix = tuple(matrix)
         
         # compute size
