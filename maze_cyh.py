@@ -3,6 +3,7 @@
 class Maze:
     
     def __init__(self, filename):
+        # read the matrix
         with open(filename, 'r') as file:
             matrix = []
             for row_string in file:
@@ -22,24 +23,29 @@ class Maze:
                 if len(row) != len(matrix[0]):
                     raise RuntimeError("Illegal format!")
             matrix = tuple(matrix)
-            
-            row_count = len(matrix) - 1
-            if row_count < 0:
-                row_count = 0
-            
-            if row_count > 0:
-                col_count = (len(matrix[0]) - 1)
-                if col_count < 0:
-                    col_count = 0
-            else:
-                col_count = 0
+        
+        # compute size
+        pillar_row_count = len(matrix)
+        if pillar_row_count > 0:
+            pillar_col_count = len(matrix[0])
+        else:
+            pillar_col_count = 0
+        
+        # attributes assignment
         self.matrix = matrix
-        self.row_count = row_count
-        self.col_count = col_count
+        self.pillar_row_count = pillar_row_count
+        self.pillar_col_count = pillar_col_count
+        self.cell_row_count = max(pillar_row_count - 1, 0)
+        self.cell_col_count = max(pillar_col_count - 1, 0)
+    
+    def pillar_indices(self):
+        for row in range(self.pillar_row_count):
+            for col in range(self.pillar_col_count):
+                yield row, col
     
     def wall_indices(self):
-        for row in range(self.row_count + 1):
-            for col in range(self.col_count + 1):
+        for row in range(self.cell_row_count + 1):
+            for col in range(self.cell_col_count + 1):
                 for hv in range(2):
                     yield row, col, hv
     
@@ -70,8 +76,8 @@ class Maze:
         return self.wall_l(row, col + 1)
     
     def cell_indices(self):
-        for row in range(self.row_count):
-            for col in range(self.col_count):
+        for row in range(self.cell_row_count):
+            for col in range(self.cell_col_count):
                 yield row, col
     
     def con_u(self, row, col):
@@ -87,9 +93,9 @@ class Maze:
         return not self.wall_r(row, col)
     
     def __str__(self):
-        chars_img = full_array_2d((self.row_count + 1) * 2, (self.col_count + 1) * 2, '┼')
-        for row in range(self.row_count + 1):
-            for col in range(self.col_count + 1):
+        chars_img = full_array_2d((self.cell_row_count + 1) * 2, (self.cell_col_count + 1) * 2, '┼')
+        for row in range(self.cell_row_count + 1):
+            for col in range(self.cell_col_count + 1):
                 x = col * 2 + 1
                 y = row * 2 + 1
                 chars_img[y][x] = ' '
@@ -110,69 +116,96 @@ class Maze:
         return string
 
 
+# directions
+
+U = 0
+L = 1
+D = 2
+R = 3
+
+
 # computing
 
 def find_gates(maze: Maze):
     gates = []
     lobbies = []
-    for row in range(maze.row_count):
+    for row in range(maze.cell_row_count):
         if not maze.wall_v(row, 0):
             gates.append((row, 0, 1))
             lobbies.append((row, 0))
-        if not maze.wall_v(row, maze.col_count):
-            gates.append((row, maze.col_count, 1))
-            lobbies.append((row, maze.col_count - 1))
-    for col in range(maze.col_count):
+        if not maze.wall_v(row, maze.cell_col_count):
+            gates.append((row, maze.cell_col_count, 1))
+            lobbies.append((row, maze.cell_col_count - 1))
+    for col in range(maze.cell_col_count):
         if not maze.wall_h(0, col):
             gates.append((0, col, 0))
             lobbies.append((0, col))
-        if not maze.wall_h(maze.row_count, col):
-            gates.append((maze.row_count, col, 0))
-            lobbies.append((maze.row_count - 1, col))
+        if not maze.wall_h(maze.cell_row_count, col):
+            gates.append((maze.cell_row_count, col, 0))
+            lobbies.append((maze.cell_row_count - 1, col))
     return tuple(gates), tuple(set(lobbies))
 
 
-def group_connected_walls(maze: Maze):
+def traverse_pillars(maze: Maze):
     groups = []
-    belonging_group = full_array_3d(maze.row_count + 1, maze.col_count + 1, 2, None)
-    for first_row, first_col, first_hv in maze.wall_indices():
-        if not maze.wall(first_row, first_col, first_hv):
+    belonging_group = full_array_2d(maze.pillar_row_count, maze.pillar_col_count, None)
+    for start_row, start_col in maze.pillar_indices():
+        if belonging_group[start_row][start_col] is not None:
             continue
-        if belonging_group[first_row][first_col][first_hv] is not None:
-            continue
-        
-        new_group = [(first_row, first_col, first_hv)]
+        new_group = [(start_row, start_col)]
+        belonging_group[start_row][start_col] = new_group
         groups.append(new_group)
-        belonging_group[first_row][first_col][first_hv] = new_group
-        first_node = [(first_row, first_col, first_hv), (neighbor_walls(maze, first_row, first_col, first_hv)), -1]
         
-        route = [first_node]
-        while True:
-            if len(route) == 0:
-                break
+        start_node = [start_row, start_col, -1]
+        route = [start_node]
+        while len(route) > 0:
             this_node = route[-1]
-            
             this_node[2] += 1
-            (this_row, this_col, this_hv), options, index = this_node
-            if not index < len(options):
+            this_row, this_col, this_direction = this_node
+            this_group = belonging_group[this_row][this_col]
+            if this_direction == U:
+                next_row = this_row - 1
+                next_col = this_col
+                if not next_row >= 0:
+                    continue
+                if not maze.wall_v(next_row, next_col):
+                    continue
+            elif this_direction == L:
+                next_row = this_row
+                next_col = this_col - 1
+                if not next_col >= 0:
+                    continue
+                if not maze.wall_h(next_row, next_col):
+                    continue
+            elif this_direction == D:
+                next_row = this_row + 1
+                next_col = this_col
+                if not next_row < maze.pillar_row_count:
+                    continue
+                if not maze.wall_v(this_row, this_col):
+                    continue
+            elif this_direction == R:
+                next_row = this_row
+                next_col = this_col + 1
+                if not next_col < maze.pillar_col_count:
+                    continue
+                if not maze.wall_h(this_row, this_col):
+                    continue
+            else:
                 route.pop()
                 continue
-            next_row, next_col, next_hv = options[index]
             
-            this_group = belonging_group[this_row][this_col][this_hv]
-            next_group = belonging_group[next_row][next_col][next_hv]
-            if next_group is this_group:
+            if belonging_group[next_row][next_col] is this_group:
                 continue
+            this_group.append((next_row, next_col))
+            belonging_group[next_row][next_col] = this_group
             
-            this_group.append((next_row, next_col, next_hv))
-            belonging_group[next_row][next_col][next_hv] = this_group
-            
-            next_options = neighbor_walls(maze, next_row, next_col, next_hv)
-            next_node = [(next_row, next_col, next_hv), next_options, -1]
+            next_node = [next_row, next_col, -1]
             route.append(next_node)
-    
     return groups
 
+
+# computing old v2
 
 def group_connected_cells(maze: Maze):
     class CellArea:
@@ -180,7 +213,7 @@ def group_connected_cells(maze: Maze):
             self.cells = []
     
     groups = []
-    belonging_group = full_array_2d(maze.row_count, maze.col_count, None)
+    belonging_group = full_array_2d(maze.cell_row_count, maze.cell_col_count, None)
     for first_row, first_col in maze.cell_indices():
         if belonging_group[first_row][first_col] is not None:
             continue
@@ -228,279 +261,33 @@ def split_by_accessibility(cell_groups, lobbies):
     return accessible_groups, inaccessible_groups
 
 
-# computing old
-# todo 这些函数还没转换，无法使用新的maze工作
-
-def traverse(self):
-    initial = [[0 for j in range(self.col_count)] for i in range(self.row_count)]
-    color = 0
-    cul_de_sac = 0
-    for x in range(self.row_count):
-        for y in range(self.col_count):
-            cell = self.cells[x][y]
-            if (x == 0 and y == 0) and (cell.left or cell.up) and initial[x][y] == 0:
-                color += 1
-                self.dfs(cell, initial, color)
-                continue
-            if (x == 0 and y == self.col_count - 1) and (cell.right or cell.up) and initial[x][
-                y] == 0:
-                color += 1
-                self.dfs(cell, initial, color)
-                continue
-            if (x == self.row_count - 1 and y == 0) and (cell.left or cell.down) and initial[x][
-                y] == 0:
-                color += 1
-                self.dfs(cell, initial, color)
-                continue
-            if (x == self.row_count - 1 and y == self.col_count - 1) and (cell.right or cell.down) and \
-                    initial[x][y] == 0:
-                color += 1
-                self.dfs(cell, initial, color)
-                continue
-            if x == 0 and cell.up and initial[x][y] == 0:
-                color += 1
-                self.dfs(cell, initial, color)
-                continue
-            if x == self.row_count - 1 and cell.down and initial[x][y] == 0:
-                color += 1
-                self.dfs(cell, initial, color)
-                continue
-            if y == 0 and cell.left and initial[x][y] == 0:
-                color += 1
-                self.dfs(cell, initial, color)
-                continue
-            if y == self.col_count - 1 and cell.right and initial[x][y] == 0:
-                color += 1
-                self.dfs(cell, initial, color)
-                continue
-    return (initial, color)
-
-
-def dfs(self, startCell, initial, color):
-    x = startCell.x
-    y = startCell.y
-    initial[x][y] = color
-    if x == 0:
-        if y != self.col_count - 1:
-            if startCell.right and initial[x][y + 1] == 0:
-                initial[x][y + 1] = color
-                self.dfs(self.cells[x][y + 1], initial, color)
-        if startCell.down and initial[x + 1][y] == 0:
-            initial[x + 1][y] = color
-            self.dfs(self.cells[x + 1][y], initial, color)
-        if y != 0:
-            if startCell.left and initial[x][y - 1] == 0:
-                initial[x][y - 1] = color
-                self.dfs(self.cells[x][y - 1], initial, color)
-    
-    elif x == self.row_count - 1:
-        if startCell.up and initial[x - 1][y] == 0:
-            initial[x - 1][y] = color
-            self.dfs(self.cells[x - 1][y], initial, color)
-        if y != self.col_count - 1:
-            if startCell.right and initial[x][y + 1] == 0:
-                initial[x][y + 1] = color
-                self.dfs(self.cells[x][y + 1], initial, color)
-        if y != 0:
-            if startCell.left and initial[x][y - 1] == 0:
-                initial[x][y - 1] = color
-                self.dfs(self.cells[x][y - 1], initial, color)
-    elif y == 0:
-        if startCell.right and initial[x][y + 1] == 0:
-            initial[x][y + 1] = color
-            self.dfs(self.cells[x][y + 1], initial, color)
-        if x != 0:
-            if startCell.up and initial[x - 1][y] == 0:
-                initial[x - 1][y] = color
-                self.dfs(self.cells[x - 1][y], initial, color)
-        if x != self.row_count - 1:
-            if startCell.down and initial[x + 1][y] == 0:
-                initial[x + 1][y] = color
-                self.dfs(self.cells[x + 1][y], initial, color)
-    elif y == self.col_count - 1:
-        if startCell.left and initial[x][y - 1] == 0:
-            initial[x][y - 1] = color
-            self.dfs(self.cells[x][y - 1], initial, color)
-        if x != 0:
-            if startCell.up and initial[x - 1][y] == 0:
-                initial[x - 1][y] = color
-                self.dfs(self.cells[x - 1][y], initial, color)
-        if x != self.row_count - 1:
-            if startCell.down and initial[x + 1][y] == 0:
-                initial[x + 1][y] = color
-                self.dfs(self.cells[x + 1][y], initial, color)
-    else:
-        if startCell.left and initial[x][y - 1] == 0:
-            initial[x][y - 1] = color
-            self.dfs(self.cells[x][y - 1], initial, color)
-        if startCell.right and initial[x][y + 1] == 0:
-            initial[x][y + 1] = color
-            self.dfs(self.cells[x][y + 1], initial, color)
-        if startCell.up and initial[x - 1][y] == 0:
-            initial[x - 1][y] = color
-            self.dfs(self.cells[x - 1][y], initial, color)
-        if startCell.down and initial[x + 1][y] == 0:
-            initial[x + 1][y] = color
-            self.dfs(self.cells[x + 1][y], initial, color)
-
-
-# 给定边界坐标，判断是否能出迷宫, 并返回能出的通道数
-def is_out(self, x, y):
-    num = 0
-    cell = self.cells[x][y]
-    if x == 0:
-        if cell.up:
-            num += 1
-        if y == 0:
-            num += int(cell.left)
-        if y == self.col_count - 1:
-            num += int(cell.right)
-    elif x == self.row_count - 1:
-        if cell.down:
-            num += 1
-        if y == 0:
-            num += int(cell.left)
-        if y == self.col_count - 1:
-            num += int(cell.right)
-    elif y == 0:
-        num += int(cell.left)
-    elif y == self.col_count - 1:
-        num += cell.right
-    return num
-
-
-def getOtherPoints(self, x0, y0, initial):
-    num = 0
-    for x in range(self.row_count):
-        for y in range(self.col_count):
-            if (x != x0 or y != y0) and initial[x][y] == initial[x0][y0]:
-                num += 1
-    return num
-
-
-def getPaths(self, initial):
-    paths = 0
-    cul_de_sacs = 0
-    edges_points = \
-        [[(0, y1) for y1 in range(self.col_count)] + [(self.row_count - 1, y2) for y2 in range(self.col_count)]
-         + [(x1, 0) for x1 in range(1, self.row_count - 1)] + [(x2, self.col_count - 1) for x2 in
-                                                               range(1, self.row_count - 1)]][0]
-    visited = [[0 for j in range(self.col_count)] for i in range(self.row_count)]
-    for point in edges_points:
-        x = point[0]
-        y = point[1]
-        visited[x][y] = 1
-        outs = self.is_out(x, y)
-        if initial[x][y] == 0:
-            continue
-        if outs == 0:
-            cul_de_sacs += 1
-            continue
-        if outs > 1:
-            paths += 1
-        gates = self.getGates(x, y, initial, edges_points)
-        if len(gates) == 0:
-            if self.getOtherPoints(x, y, initial):
-                cul_de_sacs += 1
-            continue
-        if len(gates) == 1:
-            paths += 1
-            otherPoints = self.getOtherPoints(x, y, initial)
-            
-            if self.getOtherPoints(x, y, initial) > 1:
-                cul_de_sacs += 1
-            continue
-    return (paths, cul_de_sacs)
-
-
-def compute_culdesacs(self):
-    culdesacs_groups = []
-    belonging_group = [[None for c in range(self.col_count)] for r in range(self.row_count)]
-    while True:
-        changed = False
-        for cell in self.cells:
-            row = cell.y
-            col = cell.x
-            
-            # todo uncomment it when implemented the accessibility check
-            # if not self.accessible[row][col]:
-            #     continue
-            
-            if belonging_group[row][col] is not None:
-                continue
-            
-            neighbors = []
-            if cell.up:
-                neighbors.append((row - 1, col))
-            if cell.down:
-                neighbors.append((row + 1, col))
-            if cell.right:
-                neighbors.append((row, col + 1))
-            if cell.left:
-                neighbors.append((row, col - 1))
-            
-            neighbor_culdesacs_groups = []
-            for neighbor_row, neighbor_col in neighbors:
-                if not (0 <= neighbor_col < self.col_count and 0 <= neighbor_row < self.row_count):
-                    continue
-                neighbor_caldesacs_group = belonging_group[neighbor_row][neighbor_col]
-                if neighbor_caldesacs_group is not None:
-                    neighbor_culdesacs_groups.append(neighbor_caldesacs_group)
-                    break
-            
-            if not len(neighbor_culdesacs_groups) >= len(neighbors) - 1:
-                continue
-            
-            if len(neighbor_culdesacs_groups) == 0:
-                merged_group = [(row, col)]
-                culdesacs_groups.append(merged_group)
-                belonging_group[row][col] = merged_group
-                changed = True
-            else:
-                merged_group = max(neighbor_culdesacs_groups, key=lambda g: len(g))
-                for group in neighbor_culdesacs_groups:
-                    if group is merged_group:
-                        continue
-                    culdesacs_groups.remove(group)
-                    merged_group.extend(group)
-                    for removed_row, removed_col in group:
-                        belonging_group[removed_row][removed_col] = merged_group
-                
-                merged_group.append((row, col))
-        
-        if not changed:
-            break
-    
-    return culdesacs_groups, belonging_group
-
-
 # maze utils
 
 def neighbor_walls(maze: Maze, row, col, hv):
     neighbors = []
     if hv == 0:
         neighbors.append((row, col, 1))
-        if col < maze.col_count:
+        if col < maze.cell_col_count:
             neighbors.append((row, col + 1, 1))
         if row > 0:
             neighbors.append((row - 1, col, 1))
-            if col < maze.col_count:
+            if col < maze.cell_col_count:
                 neighbors.append((row - 1, col + 1, 1))
         if col > 0:
             neighbors.append((row, col - 1, 0))
-        if col < maze.col_count:
+        if col < maze.cell_col_count:
             neighbors.append((row, col + 1, 0))
     else:
         neighbors.append((row, col, 0))
-        if row < maze.row_count:
+        if row < maze.cell_row_count:
             neighbors.append((row + 1, col, 0))
         if col > 0:
             neighbors.append((row, col - 1, 0))
-            if row < maze.row_count:
+            if row < maze.cell_row_count:
                 neighbors.append((row + 1, col - 1, 0))
         if row > 0:
             neighbors.append((row - 1, col, 1))
-        if row < maze.row_count:
+        if row < maze.cell_row_count:
             neighbors.append((row + 1, col, 1))
     neighbors = filter(lambda pos: maze.wall(*pos), neighbors)
     return tuple(neighbors)
@@ -510,11 +297,11 @@ def neighbor_cells(maze: Maze, row, col):
     neighbors = []
     if row > 0 and maze.con_u(row, col):
         neighbors.append((row - 1, col))
-    if row < maze.row_count - 1 and maze.con_d(row, col):
+    if row < maze.cell_row_count - 1 and maze.con_d(row, col):
         neighbors.append((row + 1, col))
     if col > 0 and maze.con_l(row, col):
         neighbors.append((row, col - 1))
-    if col < maze.col_count - 1 and maze.con_r(row, col):
+    if col < maze.cell_col_count - 1 and maze.con_r(row, col):
         neighbors.append((row, col + 1))
     return neighbors
 
@@ -556,8 +343,9 @@ def main():
     print("number of gates:", len(gates))
     # print("number of lobbies:", len(lobbies))
     
-    wall_groups = group_connected_walls(maze)
-    print("number of connected walls:", len(wall_groups))
+    pillar_groups = traverse_pillars(maze)
+    print("number of connected groups of pillars:", len(pillar_groups))
+    print("number of connected walls:", sum(len(g) > 1 for g in pillar_groups))
     
     cell_groups = group_connected_cells(maze)
     print("number of connected cells:", len(cell_groups))
